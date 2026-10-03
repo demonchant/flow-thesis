@@ -1,0 +1,19 @@
+{
+  "name": "unusual-whales",
+  "version": "1.0.0",
+  "description": "Connect to the official Unusual Whales market-data MCP server using each user's own API key.",
+  "author": {
+    "name": "Project maintainers"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Unusual Whales",
+    "shortDescription": "Query Unusual Whales market data.",
+    "longDescription": "Connects Codex to the official Unusual Whales remote MCP server. Each user supplies their own UW_API_KEY locally; the key is not included in this package.",
+    "developerName": "Project maintainers",
+    "category": "Finance",
+    "capabilities": ["Read"],
+    "defaultPrompt": "Use the Unusual Whales MCP tools to research a market-data question. Separate observations from inference and do not place trades."
+  },
+  "mcpServers": "./.mcp.json"
+}

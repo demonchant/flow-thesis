@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow Thesis Ledger — Replay</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101314; --panel:#191e1f; --line:#303839; --ink:#f0f3ed; --muted:#aab5b0; --accent:#b4ef74; --warn:#ffcc78; --red:#ff867b; }
+    * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
+    main { width:min(980px, calc(100% - 32px)); margin:40px auto 64px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
+    .brand { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase }
+    .mode { border:1px solid #80673f; color:var(--warn); border-radius:99px; padding:5px 10px; font-size:12px; }
+    h1 { font-size:clamp(30px,5vw,48px); line-height:1.08; letter-spacing:-.04em; margin:12px 0; }
+    .sub { color:var(--muted); max-width:680px; }
+    .layout { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:26px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px; }
+    .eyebrow { color:var(--muted); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    .statement { font-size:18px; margin:9px 0 0; }
+    .state { font-size:28px; font-weight:750; margin:5px 0; }
+    .state.supported { color:var(--accent) } .state.invalidated { color:var(--red) } .state.indeterminate { color:var(--warn) }
+    .meta { color:var(--muted); font:12px ui-monospace, monospace; overflow-wrap:anywhere; }
+    .conditions { margin-top:14px; }
+    .condition { display:grid; grid-template-columns:1fr auto; gap:8px; padding:11px 0; border-top:1px solid var(--line); }
+    .condition small { display:block; color:var(--muted); margin-top:2px; }
+    .condition b { font:13px ui-monospace, monospace; }
+    .controls { display:flex; align-items:center; gap:12px; margin-top:16px; }
+    button { border:0; border-radius:9px; background:var(--accent); color:#13200e; padding:11px 15px; font-weight:750; cursor:pointer; }
+    button:disabled { opacity:.45; cursor:default }
+    .timeline { display:flex; gap:8px; margin:14px 0; }
+    .step { height:5px; flex:1; background:var(--line); border-radius:5px; }.step.active { background:var(--accent) }
+    .proof { margin-top:14px; }
+    .notice { margin-top:20px; border-left:3px solid var(--warn); padding:10px 14px; color:var(--muted); background:#1b1d1b; font-size:13px; }
+    @media (max-width:700px) { .layout { grid-template-columns:1fr } .top { align-items:flex-start; flex-direction:column } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="brand">Flow Thesis Ledger / Research replay</div><div class="mode" id="mode"></div></div>
+  <div class="eyebrow" id="ticker"></div>
+  <h1>A thesis should change when its evidence changes.</h1>
+  <p class="sub">A replayable record of one user-defined claim, its conditions, and the observations that changed its state. This is market research, not a trade recommendation.</p>
+  <div class="layout">
+    <section class="panel">
+      <div class="eyebrow">Saved thesis · version <span id="version"></span></div>
+      <p class="statement" id="statement"></p>
+      <div class="timeline" id="timeline"></div>
+      <div class="controls"><button id="next">Replay next event</button><span class="meta" id="progress"></span></div>
+      <div class="notice">The included snapshot is explicitly synthetic. No Unusual Whales market data is present in this demo fixture.</div>
+    </section>
+    <section class="panel">
+      <div class="eyebrow">Current evaluator state</div>
+      <div class="state" id="state">Ready</div>
+      <div class="meta" id="asof"></div>
+      <div class="conditions" id="conditions"></div>
+    </section>
+  </div>
+  <section class="panel proof">
+    <div class="eyebrow">Reproducibility receipt</div>
+    <p class="meta">Input snapshot hash</p><div class="meta" id="input-hash"></div>
+    <p class="meta">Deterministic output hash</p><div class="meta" id="output-hash"></div>
+    <p class="meta">Source event IDs</p><div class="meta" id="event-ids"></div>
+    <div class="notice" id="reason">Advance the replay to inspect the state transition and its predicate evidence.</div>
+  </section>
+</main>
+<script>
+  const data = __REPLAY_DATA__;
+  let cursor = -1;
+  const $ = (id) => document.getElementById(id);
+  $('mode').textContent = data.label;
+  $('ticker').textContent = `${data.thesis.ticker} · REPLAY · READ ONLY`;
+  $('version').textContent = data.thesis.version;
+  $('statement').textContent = data.thesis.statement;
+  $('timeline').innerHTML = data.timeline.map((_, i) => `<div class="step" id="step-${i}"></div>`).join('');
+  function advance() {
+    cursor += 1;
+    const item = data.timeline[cursor];
+    $('state').textContent = item.status.toUpperCase();
+    $('state').className = `state ${item.status}`;
+    $('asof').textContent = `Evaluated at ${item.evaluated_at} UTC`;
+    $('conditions').replaceChildren(...item.predicates.map((p) => {
+      const row = document.createElement('div'); row.className = 'condition';
+      const label = document.createElement('div'); label.textContent = p.condition_id;
+      const detail = document.createElement('small'); detail.textContent = `Observed ${p.observed ?? 'unknown'} · threshold ${p.threshold}`;
+      label.appendChild(detail);
+      const result = document.createElement('b'); result.textContent = p.matched === null ? 'UNKNOWN' : p.matched ? 'MATCH' : 'NO MATCH';
+      row.append(label, result); return row;
+    }));
+    $('input-hash').textContent = item.input_hash;
+    $('output-hash').textContent = item.output_hash;
+    $('event-ids').textContent = item.event_ids.join(', ');
+    $('reason').textContent = item.reasons.length ? item.reasons.join(' · ') : `State derived by deterministic rules from ${item.event_ids.length} source event(s).`;
+    for (let i = 0; i < data.timeline.length; i++) $(`step-${i}`).classList.toggle('active', i <= cursor);
+    $('progress').textContent = `Event ${cursor + 1} of ${data.timeline.length}`;
+    $('next').disabled = cursor >= data.timeline.length - 1;
+    $('next').textContent = cursor >= data.timeline.length - 1 ? 'Replay complete' : 'Replay next event';
+  }
+  $('next').addEventListener('click', advance);
+  advance();
+  const requestedStep = Number(new URLSearchParams(window.location.search).get('step'));
+  if (Number.isInteger(requestedStep) && requestedStep > 0) {
+    for (let i = 0; i < Math.min(requestedStep, data.timeline.length - 1); i++) advance();
+  }
+</script>
+</body>
+</html>

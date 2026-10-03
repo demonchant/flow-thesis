@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "unusual-whales": {
+      "type": "http",
+      "url": "https://api.unusualwhales.com/api/mcp",
+      "bearer_token_env_var": "UW_API_KEY"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "label": "SYNTHETIC DEMONSTRATION ONLY — no Unusual Whales market data",
+  "thesis": {
+    "id": "demo-thesis-001",
+    "version": 1,
+    "ticker": "DEMO",
+    "statement": "A sample observation stays relevant only while the user's explicit invalidation threshold is not crossed.",
+    "freshness_seconds": 900,
+    "required_fields": ["flow_premium", "price_return_pct"],
+    "conditions": [
+      {
+        "id": "support-premium",
+        "field": "flow_premium",
+        "comparator": "gte",
+        "threshold": 500000,
+        "kind": "support",
+        "description": "Synthetic flow premium meets the user threshold"
+      },
+      {
+        "id": "invalidate-price",
+        "field": "price_return_pct",
+        "comparator": "lte",
+        "threshold": -1.0,
+        "kind": "invalidate",
+        "description": "Synthetic return crosses the user invalidation threshold"
+      }
+    ]
+  },
+  "events": [
+    {
+      "source": "synthetic_fixture",
+      "source_id": "sim-event-1",
+      "ticker": "DEMO",
+      "event_time": "2026-10-01T14:30:00Z",
+      "received_at": "2026-10-01T14:30:01Z",
+      "kind": "synthetic",
+      "fields": {"flow_premium": 620000, "price_return_pct": 0.2},
+      "complete": true,
+      "mode": "synthetic"
+    },
+    {
+      "source": "synthetic_fixture",
+      "source_id": "sim-event-2",
+      "ticker": "DEMO",
+      "event_time": "2026-10-01T14:31:00Z",
+      "received_at": "2026-10-01T14:31:01Z",
+      "kind": "synthetic",
+      "fields": {"flow_premium": 480000, "price_return_pct": -1.2},
+      "complete": true,
+      "mode": "synthetic"
+    }
+  ]
+}
