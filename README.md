@@ -55,6 +55,20 @@ python -m flow_thesis_ledger.monitor .local/aapl-draft.json --interval 60
 
 The first `--approve` is an explicit human confirmation, persisted by thesis ID/version. Subsequent runs can continue the approved monitoring session. Polling is foreground REST polling, defaults to 60 seconds, and stops on 401/403. State and receipts stay in `.local/flow-thesis-ledger.sqlite3`.
 
+## Graphical live console
+
+Launch the browser app from the same shell that has the server-side credentials:
+
+```powershell
+python -m flow_thesis_ledger.live_web
+```
+
+Open `http://127.0.0.1:8766`. The browser never needs or receives an API key. The app provides Overview, New Thesis, Evidence, Replay, and Settings screens; actions show progress and safe error details. A new thesis action retrieves live UW Flow Alerts, normalizes and persists matching records, compiles a strict structured OpenAI draft, and records the first deterministic evaluation. Review the draft in the UI and explicitly approve read-only monitoring before using Poll. Export evidence from the Evidence screen. Replay remains clearly labeled synthetic and separate from live observations.
+
+The console binds to localhost only and stores its SQLite ledger under `.local/`. API keys are read from the Python process environment; the app does not load or write them to `.env`. Settings distinguishes a key being present from an integration successfully responding. The shell that starts the app must inherit both credentials for the full live workflow. This repository does not include a public deployment or a shared multi-user UW data proxy.
+
+The OpenAI request uses Responses API Structured Outputs with a strict JSON Schema so the result is application-ready and independently validated before it becomes a draft; see [official Structured Outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+
 ## OpenAI and MCP setup
 
 OpenAI integration remains implemented and wired. Deterministic mocked tests need no API charge. A live request previously returned HTTP 429 `insufficient_quota`, so successful model generation has not been verified; add account credit to exercise it live. No OpenAI or UW credential is required for synthetic replay/tests.

@@ -12,7 +12,7 @@ import hashlib
 import uuid
 from dataclasses import replace
 
-from .models import Evaluation, Event, Thesis
+from .models import Condition, Evaluation, Event, Thesis
 
 
 class LedgerStore:
@@ -78,6 +78,10 @@ class LedgerStore:
             db.execute("""CREATE TABLE IF NOT EXISTS thesis_activations (
                 thesis_id TEXT NOT NULL, version INTEGER NOT NULL, approved_at TEXT NOT NULL,
                 PRIMARY KEY(thesis_id, version))""")
+            db.execute("""CREATE TABLE IF NOT EXISTS thesis_notes (
+                thesis_id TEXT NOT NULL, version INTEGER NOT NULL, summary TEXT NOT NULL,
+                uncertainties_json TEXT NOT NULL, evidence_refs_json TEXT NOT NULL,
+                PRIMARY KEY(thesis_id, version))""")
 
     def poll_cursor(self, thesis_id: str, ticker: str) -> str | None:
         with self._db() as db:
@@ -110,6 +114,68 @@ class LedgerStore:
                 (thesis.id, thesis.version, thesis.ticker.upper(), thesis.statement,
                  json.dumps(definition, sort_keys=True), created_at),
             )
+
+    def save_thesis_notes(self, thesis_id: str, version: int, summary: str,
+                          uncertainties: list[str] | tuple[str, ...],
+                          evidence_refs: list[str] | tuple[str, ...]) -> None:
+        """Persist the human-review notes attached to a structured AI draft."""
+        with self._db() as db:
+            db.execute(
+                "INSERT INTO thesis_notes VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(thesis_id, version) DO UPDATE SET summary=excluded.summary, "
+                "uncertainties_json=excluded.uncertainties_json, evidence_refs_json=excluded.evidence_refs_json",
+                (thesis_id, version, summary, json.dumps(list(uncertainties)), json.dumps(list(evidence_refs))),
+            )
+
+    def load_thesis_notes(self, thesis_id: str, version: int) -> dict[str, object]:
+        with self._db() as db:
+            row = db.execute(
+                "SELECT summary, uncertainties_json, evidence_refs_json FROM thesis_notes "
+                "WHERE thesis_id = ? AND version = ?", (thesis_id, version),
+            ).fetchone()
+        if row is None:
+            return {"summary": "", "uncertainties": [], "evidence_refs": []}
+        return {
+            "summary": row["summary"],
+            "uncertainties": json.loads(row["uncertainties_json"]),
+            "evidence_refs": json.loads(row["evidence_refs_json"]),
+        }
+
+    def load_thesis(self, thesis_id: str | None = None) -> Thesis | None:
+        """Load a persisted thesis definition without loading source market data."""
+        with self._db() as db:
+            if thesis_id:
+                row = db.execute(
+                    "SELECT * FROM thesis_versions WHERE thesis_id = ? "
+                    "ORDER BY version DESC LIMIT 1", (thesis_id,),
+                ).fetchone()
+            else:
+                row = db.execute(
+                    "SELECT * FROM thesis_versions ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+            if row is None:
+                return None
+            definition = json.loads(row["definition_json"])
+            activated = db.execute(
+                "SELECT 1 FROM thesis_activations WHERE thesis_id = ? AND version = ?",
+                (row["thesis_id"], row["version"]),
+            ).fetchone() is not None
+            return Thesis(
+                id=row["thesis_id"], version=row["version"], ticker=row["ticker"],
+                statement=row["statement"],
+                conditions=tuple(Condition(**condition) for condition in definition["conditions"]),
+                required_fields=tuple(definition.get("required_fields", [])),
+                freshness_seconds=int(definition.get("freshness_seconds", 900)),
+                status="monitoring" if activated else "draft",
+            )
+
+    def latest_receipt(self, thesis_id: str) -> dict | None:
+        with self._db() as db:
+            row = db.execute(
+                "SELECT receipt_json FROM evaluations WHERE thesis_id = ? "
+                "ORDER BY evaluated_at DESC LIMIT 1", (thesis_id,),
+            ).fetchone()
+            return json.loads(row["receipt_json"]) if row else None
 
     def activate_thesis(self, thesis: Thesis, *, human_approved: bool, approved_at: str) -> Thesis:
         """Activate read-only monitoring only after explicit human approval."""

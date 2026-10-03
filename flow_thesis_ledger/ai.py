@@ -71,12 +71,15 @@ class ThesisCompiler:
     @staticmethod
     def _validate(
         data: Any, *, thesis_id: str, version: int, allowed_evidence_refs: set[str] | None = None,
+        expected_ticker: str | None = None,
     ) -> ThesisProposal:
         if not isinstance(data, dict):
             raise ThesisCompileError("Model output was not a JSON object")
         ticker = data.get("ticker")
         if not isinstance(ticker, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,9}", ticker):
             raise ThesisCompileError("Model proposed an invalid ticker")
+        if expected_ticker is not None and ticker.upper() != expected_ticker.upper():
+            raise ThesisCompileError("Model ticker did not match the requested ticker")
         conditions_data = data.get("conditions")
         if not isinstance(conditions_data, list) or not conditions_data:
             raise ThesisCompileError("Model must propose at least one deterministic condition")
@@ -125,10 +128,15 @@ class ThesisCompiler:
         )
 
     @staticmethod
-    def _evidence_context(events: Iterable[Event], evaluation: Evaluation) -> tuple[dict[str, Any], set[str]]:
-        allowed = set(evaluation.event_ids)
+    def _evidence_context(
+        events: Iterable[Event], evaluation: Evaluation | None,
+    ) -> tuple[dict[str, Any], set[str]]:
+        event_list = list(events)
+        allowed = set(evaluation.event_ids) if evaluation is not None else {
+            event.source_id for event in event_list
+        }
         event_records = []
-        for event in events:
+        for event in event_list:
             if event.source_id not in allowed:
                 continue
             normalized_fields = {
@@ -146,27 +154,31 @@ class ThesisCompiler:
             "condition_id": item.condition_id, "kind": item.kind, "matched": item.matched,
             "observed": item.observed, "threshold": item.threshold,
             "event_ids": list(item.event_ids), "reason": item.reason,
-        } for item in evaluation.predicates]
+        } for item in evaluation.predicates] if evaluation is not None else []
         context = {
-            "evaluation_status": evaluation.status,
-            "evaluated_at": evaluation.evaluated_at.isoformat(),
-            "event_ids": list(evaluation.event_ids),
+            "evaluation_status": evaluation.status if evaluation is not None else "not_evaluated",
+            "evaluated_at": evaluation.evaluated_at.isoformat() if evaluation is not None else None,
+            "event_ids": list(evaluation.event_ids) if evaluation is not None else sorted(allowed),
             "predicates": predicates,
             "events": event_records,
-            "mode": evaluation.mode,
+            "mode": evaluation.mode if evaluation is not None else (
+                "live" if any(event.mode == "live" for event in event_list) else "synthetic"
+            ),
         }
         return context, allowed
 
     def compile(
         self, user_statement: str, *, thesis_id: str = "draft", version: int = 1,
+        expected_ticker: str | None = None,
         evaluation: Evaluation | None = None, events: Iterable[Event] = (),
     ) -> ThesisProposal:
         if not user_statement.strip() or len(user_statement) > 3000:
             raise ValueError("statement must contain 1 to 3000 characters")
         evidence_context: dict[str, Any] | None = None
         allowed_evidence_refs: set[str] = set()
-        if evaluation is not None:
-            evidence_context, allowed_evidence_refs = self._evidence_context(events, evaluation)
+        event_list = list(events)
+        if evaluation is not None or event_list:
+            evidence_context, allowed_evidence_refs = self._evidence_context(event_list, evaluation)
         request_body = {
             "model": self.model,
             "store": False,
@@ -177,7 +189,7 @@ class ThesisCompiler:
                     "Do not predict prices, recommend trades, or invent observations. Use only supported fields and explicit "
                     "thresholds justified by the user's statement. If no defensible threshold exists, return a conservative "
                     "proposal and explain uncertainty. Conditions are deterministic predicates, not conclusions about the market. "
-                    "If deterministic evaluation context is supplied, explain only its listed facts, cite only its event IDs, "
+                    "When evidence context is supplied, explain only its listed facts, cite only its event IDs, "
                     "and never infer a buy/sell direction from options flow alone. The result is always an unactivated draft."
                 )},
                 {"role": "user", "content": json.dumps({
@@ -235,4 +247,5 @@ class ThesisCompiler:
         return self._validate(
             decoded, thesis_id=thesis_id, version=version,
             allowed_evidence_refs=allowed_evidence_refs,
+            expected_ticker=expected_ticker,
         )

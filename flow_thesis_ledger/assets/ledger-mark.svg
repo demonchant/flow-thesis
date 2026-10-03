@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Flow Thesis Ledger mark</title>
+  <rect width="80" height="80" rx="22" fill="#172019"/>
+  <path d="M16 43c9 0 9-18 18-18s9 32 18 32 9-23 18-23" fill="none" stroke="#b4ef74" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="16" cy="43" r="4" fill="#b4ef74"/><circle cx="34" cy="25" r="4" fill="#b4ef74"/>
+  <circle cx="52" cy="57" r="4" fill="#ffcc78"/><circle cx="70" cy="34" r="4" fill="#b4ef74"/>
+</svg>

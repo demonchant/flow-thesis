@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 180" role="img" aria-labelledby="title desc">
+ <title id="title">Empty evidence ledger</title><desc id="desc">A quiet event timeline waiting for the first live evidence.</desc>
+ <rect x="31" y="20" width="198" height="140" rx="18" fill="#191e1f" stroke="#303839"/>
+ <path d="M60 58h68M60 78h130M60 98h95" stroke="#3a4440" stroke-width="6" stroke-linecap="round"/>
+ <path d="M57 128h30m18 0h30m18 0h30" stroke="#b4ef74" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round"/>
+ <circle cx="57" cy="128" r="7" fill="#b4ef74"/><circle cx="103" cy="128" r="5" fill="#ffcc78" opacity=".8"/><circle cx="149" cy="128" r="5" fill="#b4ef74" opacity=".65"/><circle cx="195" cy="128" r="5" fill="#b4ef74" opacity=".4"/>
+</svg>

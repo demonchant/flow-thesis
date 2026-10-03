@@ -133,6 +133,21 @@ class LivePipelineTests(unittest.TestCase):
             self.assertEqual(restarted.poll_cursor(thesis.id, thesis.ticker), now.isoformat())
             self.assertEqual(restarted.latest_status(thesis.id), evaluation.status)
 
+    def test_ai_review_notes_survive_store_restart(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ledger.sqlite3"
+            first = LedgerStore(path)
+            first.save_thesis_notes("notes", 1, "Evidence summary", ["flow is not direction"], ["uw-alert-1"])
+            first.close()
+            restarted = LedgerStore(path)
+            try:
+                self.assertEqual(restarted.load_thesis_notes("notes", 1), {
+                    "summary": "Evidence summary", "uncertainties": ["flow is not direction"],
+                    "evidence_refs": ["uw-alert-1"],
+                })
+            finally:
+                restarted.close()
+
     def test_uw_auth_header_is_bearer_and_route_is_read_only(self) -> None:
         class FakeResponse:
             status = 200
