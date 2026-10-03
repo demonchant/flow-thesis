@@ -14,7 +14,7 @@ from .models import Condition, Evaluation, Event, Thesis
 
 
 ALLOWED_FIELDS = {
-    "total_premium", "total_size", "total_ask_premium", "total_bid_premium",
+    "total_premium", "total_size", "underlying_price", "total_ask_premium", "total_bid_premium",
     "has_sweep", "has_multileg", "has_singleleg",
 }
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -190,7 +190,8 @@ class ThesisCompiler:
                     "thresholds justified by the user's statement. If no defensible threshold exists, return a conservative "
                     "proposal and explain uncertainty. Conditions are deterministic predicates, not conclusions about the market. "
                     "When evidence context is supplied, explain only its listed facts, cite only its event IDs, "
-                    "and never infer a buy/sell direction from options flow alone. The result is always an unactivated draft."
+                    "and never infer a buy/sell direction from options flow alone. The underlying_price field is the "
+                    "price attached to that alert at its event time, not a current quote. The result is always an unactivated draft."
                 )},
                 {"role": "user", "content": json.dumps({
                     "user_statement": user_statement,

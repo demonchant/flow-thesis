@@ -1,0 +1,48 @@
+1
+00:00:00,100 --> 00:00:03,865
+Options flow is evidence, not a conclusion.
+
+2
+00:00:03,815 --> 00:00:09,895
+Flow Thesis Ledger tests a stated thesis against live Unusual Whales Flow Alerts.
+
+3
+00:00:09,895 --> 00:00:14,505
+I enter a ticker and describe the conditions I want to evaluate.
+
+4
+00:00:14,505 --> 00:00:23,307
+The app retrieves the live alert, normalizes and stores its fields, and shows the underlying reference price recorded with that alert.
+
+5
+00:00:23,307 --> 00:00:28,320
+OpenAI proposes structured rules and states what remains uncertain.
+
+6
+00:00:28,320 --> 00:00:31,614
+The proposal is validated as a draft.
+
+7
+00:00:31,614 --> 00:00:36,692
+It cannot place a trade, and the model does not decide the thesis outcome.
+
+8
+00:00:36,692 --> 00:00:41,848
+After reviewing the rules, I explicitly approve read-only monitoring.
+
+9
+00:00:41,848 --> 00:00:50,390
+A poll checks for new observations, avoids duplicate records, and evaluates the stored evidence with deterministic rules.
+
+10
+00:00:50,390 --> 00:00:54,075
+The receipt makes the inputs and result traceable.
+
+11
+00:00:54,075 --> 00:01:00,234
+You can see what the available evidence supports, what it does not, and when it is incomplete.
+
+12
+00:01:00,234 --> 00:01:06,054
+Flow Thesis Ledger is an evidence monitor—not a price prediction or trading bot.
+

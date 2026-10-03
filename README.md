@@ -4,7 +4,7 @@ Flow Thesis Ledger turns a user-written options-flow thesis into bounded, determ
 
 ## What works
 
-- Reads UW `GET /api/option-trades/flow-alerts` and normalizes the account's observed `ticker`, premium, size, and sweep/multileg fields into typed events.
+- Reads UW `GET /api/option-trades/flow-alerts` and normalizes the account's observed `ticker`, option premium, underlying reference price at alert time, size, and sweep/multileg fields into typed events.
 - Persists event versions, polling cursors, thesis activations, evaluation receipts, and state transitions in SQLite. Repeated observations are deduplicated and a full page is marked potentially truncated without advancing the cursor.
 - Evaluates allow-listed numeric and boolean predicates deterministically. Missing required evidence produces `indeterminate`; it cannot silently count as support.
 - Uses the OpenAI Responses API with strict JSON Schema output to compile the user's statement plus optional normalized evaluation evidence into an unactivated thesis draft. Local tests mock the API response and cover request construction, parsing, evidence validation, draft status, failure sanitization, and the activation guard.
@@ -68,6 +68,8 @@ Open `http://127.0.0.1:8766`. The browser never needs or receives an API key. Th
 The console binds to localhost only and stores its SQLite ledger under `.local/`. API keys are read from the Python process environment; the app does not load or write them to `.env`. Settings distinguishes a key being present from an integration successfully responding. The shell that starts the app must inherit both credentials for the full live workflow. This repository does not include a public deployment or a shared multi-user UW data proxy.
 
 The OpenAI request uses Responses API Structured Outputs with a strict JSON Schema so the result is application-ready and independently validated before it becomes a draft; see [official Structured Outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+The live demo narration and shot list are in [the voiceover guide](docs/LIVE_DEMO_VOICEOVER.md). It is designed for an actual live browser run; do not substitute the synthetic replay or invent a changing market state in the submission video.
 
 ## OpenAI and MCP setup
 

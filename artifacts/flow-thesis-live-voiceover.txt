@@ -1,0 +1,13 @@
+Options flow is evidence, not a conclusion. Flow Thesis Ledger tests a stated thesis against live Unusual Whales Flow Alerts.
+
+I enter a ticker and describe the conditions I want to evaluate.
+
+The app retrieves the live alert, normalizes and stores its fields, and shows the underlying reference price recorded with that alert. OpenAI proposes structured rules and states what remains uncertain.
+
+The proposal is validated as a draft. It cannot place a trade, and the model does not decide the thesis outcome.
+
+After reviewing the rules, I explicitly approve read-only monitoring.
+
+A poll checks for new observations, avoids duplicate records, and evaluates the stored evidence with deterministic rules. The receipt makes the inputs and result traceable.
+
+You can see what the available evidence supports, what it does not, and when it is incomplete. Flow Thesis Ledger is an evidence monitor—not a price prediction or trading bot.

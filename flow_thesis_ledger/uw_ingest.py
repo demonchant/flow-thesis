@@ -63,6 +63,7 @@ def normalize_flow_alerts(payload: Any, *, received_at: datetime | None = None) 
         aliases = {
             "total_premium": ("total_premium", "premium"),
             "total_size": ("total_size", "size"),
+            "underlying_price": ("underlying_price", "stock_price"),
             "total_ask_premium": ("total_ask_side_prem", "total_ask_premium", "ask_premium"),
             "total_bid_premium": ("total_bid_side_prem", "total_bid_premium", "bid_premium"),
         }

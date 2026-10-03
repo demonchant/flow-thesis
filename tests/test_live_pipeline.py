@@ -24,7 +24,7 @@ class LivePipelineTests(unittest.TestCase):
     def test_normalize_flow_alert_with_known_fields(self) -> None:
         events = normalize_flow_alerts({"data": [{
             "id": "safe-id", "ticker": "AAPL", "created_at": "2026-10-03T10:00:00Z",
-            "total_premium": "125000", "total_size": 42,
+            "total_premium": "125000", "total_size": 42, "underlying_price": "$183.42",
             "total_ask_side_prem": "100,000", "total_bid_side_prem": "25,000",
             "has_sweep": True,
             "unexpected_private_field": "ignored",
@@ -32,7 +32,7 @@ class LivePipelineTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].ticker, "AAPL")
         self.assertEqual(events[0].fields, {
-            "total_premium": 125000.0, "total_size": 42.0,
+            "total_premium": 125000.0, "total_size": 42.0, "underlying_price": 183.42,
             "total_ask_premium": 100000.0, "total_bid_premium": 25000.0,
             "has_sweep": True,
         })

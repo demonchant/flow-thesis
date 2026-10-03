@@ -5,7 +5,7 @@
 | Claim | Implementation | Verification evidence |
 |---|---|---|
 | UW Flow Alerts can be consumed with this account | `uw_api.py`, `verify_uw.py` | Account-run verifier reported HTTP 200 for list and detail routes; safe response shapes are captured without values in the report supplied by the account owner. |
-| Live Flow Alert field names normalize correctly | `uw_ingest.py` | Tests use the observed `ticker`, `total_premium`, `total_size`, `total_ask_side_prem`, and `total_bid_side_prem` field names and string/numeric encodings. |
+| Live Flow Alert field names normalize correctly | `uw_ingest.py` | Tests use the observed `ticker`, `underlying_price`, `total_premium`, `total_size`, `total_ask_side_prem`, and `total_bid_side_prem` field names and string/numeric encodings. |
 | Observations persist and duplicates are idempotent | `store.py`, `uw_ingest.py` | Unit tests cover duplicate writes, repeated polling, cursor ordering, and persistence after constructing a new store over the same SQLite file. |
 | Deterministic evaluation is auditable | `engine.py`, `store.py` | Tests cover known predicate states, missing metrics → `indeterminate`, input/output hashes, and append-only evaluation receipts. |
 | AI only creates a bounded thesis draft | `ai.py`, `compile_thesis.py` | Mocked Responses API tests inspect Bearer request construction, strict JSON Schema, `store=false`, parsing, field/evidence validation, draft status, and sanitized quota failure. |
