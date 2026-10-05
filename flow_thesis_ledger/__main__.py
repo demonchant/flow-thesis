@@ -47,7 +47,7 @@ def load_snapshot(path: Path) -> tuple[Thesis, list[Event], str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Replay a Flow Thesis Ledger snapshot")
-    parser.add_argument("snapshot", type=Path, help="JSON snapshot; synthetic and replay data must be labeled")
+    parser.add_argument("snapshot", type=Path, help="JSON snapshot containing recorded observation data")
     parser.add_argument("--db", type=Path, help="optional SQLite path for local receipt persistence")
     args = parser.parse_args()
     thesis, events, label = load_snapshot(args.snapshot)

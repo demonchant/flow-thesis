@@ -162,7 +162,7 @@ class ThesisCompiler:
             "predicates": predicates,
             "events": event_records,
             "mode": evaluation.mode if evaluation is not None else (
-                "live" if any(event.mode == "live" for event in event_list) else "synthetic"
+                "live" if any(event.mode == "live" for event in event_list) else "replay"
             ),
         }
         return context, allowed
@@ -216,8 +216,16 @@ class ThesisCompiler:
                     error_obj = json.loads(error.read().decode("utf-8"))
                     err = error_obj.get("error", {}) if isinstance(error_obj, dict) else {}
                     safe_code = err.get("code") if isinstance(err, dict) else None
-                    if safe_code in {"insufficient_quota", "rate_limit_exceeded"}:
+                    safe_codes = {
+                        "insufficient_quota", "credit_balance_exhausted", "rate_limit_exceeded",
+                        "rate_limit_error", "slow_down", "usage_limit_exceeded",
+                        "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
+                        "organization_usage_limit_exceeded",
+                    }
+                    if isinstance(safe_code, str) and safe_code in safe_codes:
                         category = safe_code
+                    elif not isinstance(safe_code, str):
+                        category = "rate_limit_or_quota"
                 except (ValueError, UnicodeDecodeError):
                     pass
             raise ThesisCompileError(

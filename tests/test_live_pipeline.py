@@ -16,8 +16,10 @@ from flow_thesis_ledger.store import LedgerStore
 from flow_thesis_ledger.uw_api import UWAPIError, UWClient, UWResponse
 from flow_thesis_ledger.uw_ingest import FlowAlertPoller, normalize_flow_alerts
 from flow_thesis_ledger.verify_uw import _safe_shape, check
-from flow_thesis_ledger.__main__ import load_snapshot
-from flow_thesis_ledger.engine import evaluate_snapshot, replay
+from flow_thesis_ledger.engine import evaluate_snapshot
+from flow_thesis_ledger.models import Event
+from flow_thesis_ledger.rules_compiler import compile_rule_based
+from flow_thesis_ledger.live_web import _live_replay_payload, _status_payload
 
 
 class LivePipelineTests(unittest.TestCase):
@@ -42,6 +44,25 @@ class LivePipelineTests(unittest.TestCase):
         self.assertEqual(normalize_flow_alerts({"data": [{"ticker_symbol": "AAPL"}]}), [])
         with self.assertRaises(ValueError):
             normalize_flow_alerts({"unexpected": []})
+
+    def test_no_cost_rule_compiler_uses_explicit_threshold_and_live_evidence(self) -> None:
+        now = datetime.now(timezone.utc)
+        event = Event("unusualwhales.flow_alerts", "uw-1", "IWM", now, now,
+                      "flow_alert", {"total_premium": 120000.0}, mode="live")
+        proposal = compile_rule_based(
+            "Monitor IWM premium evidence", thesis_id="draft-1", expected_ticker="IWM",
+            total_premium_threshold=100000, events=[event],
+        )
+        self.assertEqual(proposal.thesis.status, "draft")
+        self.assertEqual(proposal.thesis.required_fields, ("total_premium",))
+        self.assertEqual([(c.kind, c.comparator, c.threshold) for c in proposal.thesis.conditions], [
+            ("support", "gte", 100000.0), ("weaken", "lt", 100000.0),
+        ])
+        self.assertEqual(proposal.evidence_refs, ("uw-1",))
+        self.assertIn("no OpenAI request", proposal.summary)
+        with self.assertRaises(ValueError):
+            compile_rule_based("test", thesis_id="bad", expected_ticker="IWM",
+                               total_premium_threshold=float("nan"), events=[event])
 
     def test_empty_page_is_valid_and_missing_metrics_fail_indeterminate(self) -> None:
         self.assertEqual(normalize_flow_alerts({"data": []}), [])
@@ -132,6 +153,56 @@ class LivePipelineTests(unittest.TestCase):
             self.assertEqual(len(restarted.load_events()), 1)
             self.assertEqual(restarted.poll_cursor(thesis.id, thesis.ticker), now.isoformat())
             self.assertEqual(restarted.latest_status(thesis.id), evaluation.status)
+
+    def test_live_replay_uses_saved_uw_events_and_excludes_non_live_snapshots(self) -> None:
+        first_time = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+        second_time = datetime(2026, 10, 5, 10, 1, tzinfo=timezone.utc)
+        thesis = Thesis("live-replay", 1, "QQQ", "Monitor premium", (
+            Condition("support", "total_premium", "gte", 100000, "support", "threshold"),
+            Condition("weaken", "total_premium", "lt", 100000, "weaken", "threshold"),
+        ), ("total_premium",), 3600, status="draft")
+        live_events = [
+            Event("unusualwhales.flow_alerts", "uw-first", "QQQ", first_time, first_time,
+                  "flow_alert", {"total_premium": 120000.0}, mode="live"),
+            Event("unusualwhales.flow_alerts", "uw-second", "QQQ", second_time, second_time,
+                  "flow_alert", {"total_premium": 80000.0}, mode="live"),
+        ]
+        non_live = Event("replay-source", "non-live-only", "QQQ", second_time, second_time,
+                         "flow_alert", {"total_premium": 999999.0}, mode="replay")
+        store = LedgerStore(":memory:")
+        self.addCleanup(store.close)
+        store.append_events([*live_events, non_live])
+
+        payload = _live_replay_payload(store, thesis)
+
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["mode"], "live")
+        self.assertEqual([step["event_id"] for step in payload["timeline"]], ["uw-first", "uw-second"])
+        self.assertEqual([step["status"] for step in payload["timeline"]], ["supported", "weakened"])
+        self.assertNotIn("non-live-only", repr(payload))
+
+    def test_live_replay_empty_state_does_not_fall_back_to_fixture(self) -> None:
+        thesis = Thesis("live-empty", 1, "QQQ", "Monitor premium", (), (), 3600, status="draft")
+        store = LedgerStore(":memory:")
+        self.addCleanup(store.close)
+        payload = _live_replay_payload(store, thesis)
+        self.assertFalse(payload["available"])
+        self.assertEqual(payload["mode"], "live")
+        self.assertIn("No live UW observations", payload["message"])
+
+    def test_status_endpoint_payload_is_always_an_object(self) -> None:
+        store = LedgerStore(":memory:")
+        self.addCleanup(store.close)
+        empty = _status_payload(store, None, None)
+        self.assertIsInstance(empty, dict)
+        self.assertIsNone(empty["thesis"])
+        thesis = Thesis("status-check", 1, "QQQ", "Status test", (), (), 3600, status="draft")
+        store.save_thesis(thesis, "2026-10-05T10:00:00+00:00")
+        loaded = store.load_thesis()
+        self.assertIsNotNone(loaded)
+        result = _status_payload(store, loaded, "Restored draft")
+        self.assertEqual(result["thesis"]["ticker"], "QQQ")
+        self.assertEqual(result["summary"], "Restored draft")
 
     def test_ai_review_notes_survive_store_restart(self) -> None:
         with TemporaryDirectory() as directory:
@@ -297,14 +368,6 @@ class LivePipelineTests(unittest.TestCase):
         # Approval is durable; a restart can continue read-only monitoring without re-approval.
         resumed = prepare_monitoring(thesis, store, approve=False, now="2026-10-03T00:01:00Z")
         self.assertEqual(resumed.status, "monitoring")
-
-    def test_synthetic_regression_remains_supported_then_invalidated(self) -> None:
-        snapshot = Path(__file__).parents[1] / "examples" / "thesis_replay.json"
-        thesis, events, _ = load_snapshot(snapshot)
-        first = replay(thesis, events)
-        second = replay(thesis, events)
-        self.assertEqual([item.status for item in first], ["supported", "invalidated"])
-        self.assertEqual([item.output_hash for item in first], [item.output_hash for item in second])
 
     def test_compiler_sanitizes_provider_quota_error(self) -> None:
         error = HTTPError("https://api.openai.com/v1/responses", 429, "limited", {},

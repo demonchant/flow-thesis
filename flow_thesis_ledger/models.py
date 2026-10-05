@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 Comparator = Literal["gte", "gt", "lte", "lt", "eq"]
 ConditionKind = Literal["support", "weaken", "invalidate"]
-EventKind = Literal["flow_alert", "constituent_trade", "context", "synthetic"]
+EventKind = Literal["flow_alert", "constituent_trade", "context"]
 ThesisStatus = Literal[
     "draft", "monitoring", "supported", "weakened", "invalidated", "indeterminate", "closed"
 ]
@@ -69,7 +69,7 @@ class Event:
     kind: EventKind
     fields: dict[str, Any] = field(default_factory=dict)
     complete: bool = True
-    mode: Literal["live", "replay", "synthetic"] = "replay"
+    mode: Literal["live", "replay"] = "replay"
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.ticker.strip():
@@ -106,4 +106,4 @@ class Evaluation:
     reasons: tuple[str, ...]
     input_hash: str
     output_hash: str
-    mode: Literal["live", "replay", "synthetic"]
+    mode: Literal["live", "replay"]

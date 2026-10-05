@@ -8,7 +8,7 @@ Flow Thesis Ledger turns a user-written options-flow thesis into bounded, determ
 - Persists event versions, polling cursors, thesis activations, evaluation receipts, and state transitions in SQLite. Repeated observations are deduplicated and a full page is marked potentially truncated without advancing the cursor.
 - Evaluates allow-listed numeric and boolean predicates deterministically. Missing required evidence produces `indeterminate`; it cannot silently count as support.
 - Uses the OpenAI Responses API with strict JSON Schema output to compile the user's statement plus optional normalized evaluation evidence into an unactivated thesis draft. Local tests mock the API response and cover request construction, parsing, evidence validation, draft status, failure sanitization, and the activation guard.
-- Preserves an offline synthetic replay that transitions `supported` → `invalidated` with repeatable hashes.
+- Replays saved live UW alerts in market-event order and recomputes the thesis state at each point using deterministic rules; each step exposes its source alert and reproducibility hashes.
 - Includes an optional Unusual Whales MCP plugin and a remote server configuration using each user's local `UW_API_KEY`.
 
 ## Quick start
@@ -16,18 +16,9 @@ Flow Thesis Ledger turns a user-written options-flow thesis into bounded, determ
 Requires Python 3.11+; the application and tests use the Python standard library.
 
 ```powershell
-python -m flow_thesis_ledger examples/thesis_replay.json
 python -m unittest discover -s tests -v
 python -m compileall -q flow_thesis_ledger tests
 ```
-
-To view the synthetic state transitions in a local browser:
-
-```powershell
-python -m flow_thesis_ledger.web examples/thesis_replay.json
-```
-
-Then open `http://127.0.0.1:8765`. The replay is explicitly synthetic and makes no API calls.
 
 ## Live UW pipeline
 
@@ -63,17 +54,17 @@ Launch the browser app from the same shell that has the server-side credentials:
 python -m flow_thesis_ledger.live_web
 ```
 
-Open `http://127.0.0.1:8766`. The browser never needs or receives an API key. The app provides Overview, New Thesis, Evidence, Replay, and Settings screens; actions show progress and safe error details. A new thesis action retrieves live UW Flow Alerts, normalizes and persists matching records, compiles a strict structured OpenAI draft, and records the first deterministic evaluation. Review the draft in the UI and explicitly approve read-only monitoring before using Poll. Export evidence from the Evidence screen. Replay remains clearly labeled synthetic and separate from live observations.
+Open `http://127.0.0.1:8766`. The browser never needs or receives an API key. The app provides Overview, New Thesis, Evidence, Replay, and Settings screens; New Thesis loads ticker symbols from the current UW Flow Alerts page. A new thesis action retrieves live UW alerts, normalizes and persists matching records, creates a draft with either the no-cost deterministic rule compiler or the optional OpenAI structured-output compiler, and records the first deterministic evaluation. Review and explicitly approve read-only monitoring before polling. Replay steps through the actual live alerts saved for the current thesis in event-time order and recomputes the state at every step. It never substitutes a bundled example; with no saved live observations, it displays an empty state. Export evidence from the Evidence screen.
 
 The console binds to localhost only and stores its SQLite ledger under `.local/`. API keys are read from the Python process environment; the app does not load or write them to `.env`. Settings distinguishes a key being present from an integration successfully responding. The shell that starts the app must inherit both credentials for the full live workflow. This repository does not include a public deployment or a shared multi-user UW data proxy.
 
-The OpenAI request uses Responses API Structured Outputs with a strict JSON Schema so the result is application-ready and independently validated before it becomes a draft; see [official Structured Outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+The optional OpenAI request uses Responses API Structured Outputs with a strict JSON Schema so the result is application-ready and independently validated before it becomes a draft; see [official Structured Outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs). The deterministic mode instead applies the threshold entered in the UI; it does not infer rules from free text and makes no OpenAI request.
 
-The live demo narration and shot list are in [the voiceover guide](docs/LIVE_DEMO_VOICEOVER.md). It is designed for an actual live browser run; do not substitute the synthetic replay or invent a changing market state in the submission video.
+The current screen capture can be turned into a polished demo with the [video renderer](scripts/render_demo_video.py). It adds an animated title and section cards, subtle push-ins, transition swishes, ElevenLabs narration, and a quiet original music bed, while cutting the old error notices. From PowerShell in the repository root, run `./scripts/render_demo_video.ps1`; it reads an existing process key or the current user's environment setting without displaying it. The output is `artifacts/flow-thesis-demo.mp4`; the raw `1.mp4` capture is local-only and should not be committed. See [video edit notes](docs/DEMO_VIDEO_EDIT.md). The older recording walkthrough is documented in the [screen recording runbook](docs/DEMO_RECORDING_RUNBOOK.md).
 
 ## OpenAI and MCP setup
 
-OpenAI integration remains implemented and wired. Deterministic mocked tests need no API charge. A live request previously returned HTTP 429 `insufficient_quota`, so successful model generation has not been verified; add account credit to exercise it live. No OpenAI or UW credential is required for synthetic replay/tests.
+OpenAI integration remains implemented and wired. Deterministic mocked tests need no API charge. A live request previously returned HTTP 429 `insufficient_quota`, so successful model generation has not been verified; add account credit to exercise it live. Unit tests use isolated fixtures; the user-facing Replay page only accepts saved live UW events.
 
 Codex MCP configuration is available in this repository as `plugins/unusual-whales/.mcp.json` and a user marketplace entry at `.agents/plugins/marketplace.json`. It points to the official hosted UW MCP server and resolves the user's `UW_API_KEY` from their environment. The plugin package includes an on-demand skill for other users; each needs their own UW API key and account entitlements. See [MCP setup and tools](plugins/unusual-whales/README.md).
 
@@ -84,7 +75,7 @@ Codex MCP configuration is available in this repository as `plugins/unusual-whal
 - **UW endpoints:** `GET /api/option-trades/flow-alerts`; `GET /api/option-trades/flow-alerts/{id}` (used by the safe verifier). The live monitor uses the first route. No write/trading route is used.
 - **MCP / agent:** Yes, an optional Codex plugin connects to the official UW MCP endpoint. The product's thesis compiler is a bounded OpenAI structured-output workflow, not an autonomous trading agent.
 - **Other tools:** Python standard library, SQLite, OpenAI Responses API.
-- **Working images/demo:** `artifacts/` (see the synthetic replay screenshot and evidence notes).
+- **Working images/demo:** `artifacts/` and [live recording runbook](docs/DEMO_RECORDING_RUNBOOK.md).
 - **Run locally:** See [Quick start](#quick-start) and [Live UW pipeline](#live-uw-pipeline).
 - **Configuration:** Environment variables only; no secrets belong in this repository. Trial access is route-specific and should be checked with `verify_uw`.
 
@@ -92,9 +83,8 @@ Codex MCP configuration is available in this repository as `plugins/unusual-whal
 
 ## Repository map
 
-- `flow_thesis_ledger/` — API client, normalization/poller, deterministic engine, SQLite store, AI compiler, CLI, and replay viewer.
-- `examples/thesis_replay.json` — labeled synthetic fixture.
-- `tests/` — deterministic tests for normalization, persistence, polling, failures, AI response mocks, human approval, and replay.
+- `flow_thesis_ledger/` — API client, normalization/poller, deterministic engine, SQLite store, AI compiler, and live console with live-ledger replay.
+- `tests/` — deterministic tests for normalization, persistence, polling, failures, AI response mocks, human approval, and live replay filtering.
 - `docs/UW_EVIDENCE.md` — implementation and verification evidence with known limits.
 - `plugins/unusual-whales/` — portable MCP plugin scaffold and safe tool catalog command.
 - `artifacts/` — working product images for the hackathon post.

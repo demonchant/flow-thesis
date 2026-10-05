@@ -17,7 +17,9 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from .ai import ThesisCompileError, ThesisCompiler
+from .engine import replay
 from .models import Thesis
+from .rules_compiler import compile_rule_based
 from .store import LedgerStore
 from .uw_api import UWAPIError, UWClient
 from .uw_ingest import FlowAlertPoller, classify_uw_error, normalize_flow_alerts
@@ -61,6 +63,44 @@ def _status_payload(store: LedgerStore, thesis: Thesis | None, summary: str | No
             "complete": event.complete, "mode": event.mode,
         } for event in events[-20:]],
         "transitions": store.transitions(thesis.id),
+    }
+
+
+def _live_replay_payload(store: LedgerStore, thesis: Thesis | None) -> dict[str, Any]:
+    """Build a point-in-time replay only from real UW observations in this ledger."""
+    if thesis is None:
+        return {"available": False, "mode": "live", "message": "Create a thesis from live UW evidence to start its replay."}
+    versions: dict[tuple[str, str], Any] = {}
+    for event in store.load_events():
+        if event.ticker.upper() == thesis.ticker.upper() and event.mode == "live":
+            versions[(event.source, event.source_id)] = event
+    ordered = sorted(versions.values(), key=lambda item: (item.event_time, item.source_id))
+    if not ordered:
+        return {
+            "available": False, "mode": "live", "ticker": thesis.ticker,
+            "message": "No live UW observations for this thesis are saved in the local ledger yet. Fetch live evidence first.",
+        }
+    evaluations = replay(thesis, ordered)
+    timeline = []
+    for index, (event, evaluation) in enumerate(zip(ordered, evaluations, strict=True)):
+        timeline.append({
+            "index": index,
+            "event_id": event.source_id,
+            "event_time": event.event_time.isoformat(),
+            "received_at": event.received_at.isoformat(),
+            "ticker": event.ticker,
+            "fields": event.fields,
+            "complete": event.complete,
+            "status": evaluation.status,
+            "predicates": [item.__dict__ for item in evaluation.predicates],
+            "reasons": evaluation.reasons,
+            "input_hash": evaluation.input_hash,
+            "output_hash": evaluation.output_hash,
+        })
+    return {
+        "available": True, "mode": "live", "ticker": thesis.ticker,
+        "statement": thesis.statement, "thesis_version": thesis.version,
+        "event_count": len(ordered), "timeline": timeline,
     }
 
 
@@ -123,14 +163,9 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
         "flow-path.svg": "image/svg+xml",
         "empty-ledger.svg": "image/svg+xml",
     }
-    from .web import _page_data
-    replay_snapshot = Path(__file__).parents[1] / "examples" / "thesis_replay.json"
-    replay_data = _page_data(replay_snapshot)
-    replay_json = json.dumps(replay_data, separators=(",", ":"), default=str).replace("</", "<\\/")
-    replay_page = Path(__file__).with_name("viewer.html").read_text(encoding="utf-8").replace("__REPLAY_DATA__", replay_json).encode("utf-8")
-
     def perform_prepare(payload: dict[str, Any], progress: Callable[[str], None]) -> dict[str, Any]:
         ticker, statement = payload.get("ticker"), payload.get("statement")
+        compiler_mode = payload.get("compiler_mode", "openai")
         if not isinstance(ticker, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,9}", ticker.strip()):
             raise ValueError("Ticker must be 1 to 10 letters/numbers")
         if not isinstance(statement, str) or not statement.strip() or len(statement) > 3000:
@@ -147,12 +182,26 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
         if not matches:
             raise ValueError("UW returned no normalizable Flow Alerts for this ticker; choose a ticker with current alerts")
         store.append_events(matches)
-        progress(f"Compiling a structured thesis from {len(matches)} normalized UW alert(s)…")
+        progress(f"Building a thesis draft from {len(matches)} normalized UW alert(s)…")
         thesis_id = "thesis-" + uuid.uuid4().hex[:16]
-        proposal = ThesisCompiler().compile(
-            statement, thesis_id=thesis_id, expected_ticker=ticker, events=matches,
-        )
-        state["verified"]["openai"] = True
+        if compiler_mode == "rules":
+            try:
+                threshold = float(payload.get("total_premium_threshold"))
+            except (TypeError, ValueError):
+                raise ValueError("Enter a numeric total-premium threshold for rule-based mode") from None
+            proposal = compile_rule_based(
+                statement, thesis_id=thesis_id, expected_ticker=ticker,
+                total_premium_threshold=threshold, events=matches,
+            )
+            compiler_name = "Deterministic rule compiler (no OpenAI request)"
+        elif compiler_mode == "openai":
+            proposal = ThesisCompiler().compile(
+                statement, thesis_id=thesis_id, expected_ticker=ticker, events=matches,
+            )
+            state["verified"]["openai"] = True
+            compiler_name = "OpenAI structured-output compiler"
+        else:
+            raise ValueError("Choose the OpenAI or rule-based compiler")
         store.save_thesis(proposal.thesis, datetime.now(timezone.utc).isoformat())
         store.save_thesis_notes(
             proposal.thesis.id, proposal.thesis.version, proposal.summary,
@@ -164,7 +213,8 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
         with state_lock:
             state["thesis"], state["summary"] = proposal.thesis, proposal.summary
             result = _status_payload(store, state["thesis"], state["summary"], state["verified"])
-        result["message"] = f"Draft compiled from {len(matches)} normalized UW alert(s), then deterministically evaluated. Review before approval."
+        result["message"] = f"{compiler_name} created a draft from {len(matches)} normalized live UW alert(s), then deterministic evaluation ran. Review before approval."
+        result["compiler_mode"] = compiler_mode
         result["initial_evaluation"] = initial_evaluation.status
         result["possibly_truncated"] = len(response.body.get("data", [])) >= PAGE_LIMIT
         return result
@@ -207,7 +257,11 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
         with jobs_lock:
             for existing in jobs.values():
                 if existing["status"] in {"queued", "running"}:
-                    return 409, {"error": "Another operation is still running", "job_id": existing["id"]}
+                    return 409, {
+                        "error": "Another operation is still running",
+                        "job_id": existing["id"], "kind": existing["kind"],
+                        "status": existing["status"], "progress": existing["progress"],
+                    }
             job_id = uuid.uuid4().hex
             job = {"id": job_id, "kind": kind, "status": "queued", "progress": "Queued…"}
             jobs[job_id] = job
@@ -263,17 +317,43 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
             route = urlsplit(self.path).path
             if route in {"/", "/index.html", "/overview", "/new-thesis", "/evidence", "/replay", "/settings"}:
                 self._send(200, page, "text/html; charset=utf-8")
-            elif route == "/synthetic-replay":
-                self._send(200, replay_page, "text/html; charset=utf-8")
             elif route.startswith("/assets/"):
                 name = route.rsplit("/", 1)[-1]
                 if name not in asset_types:
                     self._send_json(404, {"error": "Not found"})
                     return
                 self._send(200, (asset_dir / name).read_bytes(), asset_types[name])
+            elif route == "/api/live-tickers":
+                try:
+                    response = UWClient(timeout=12, retries=0).flow_alerts({
+                        "limit": PAGE_LIMIT, "all_opening": "false",
+                    })
+                    rows = response.body.get("data", []) if isinstance(response.body, dict) else []
+                    tickers = sorted({
+                        row.get("ticker", "").strip().upper()
+                        for row in rows
+                        if isinstance(row, dict) and isinstance(row.get("ticker"), str) and row.get("ticker").strip()
+                    })
+                    state["verified"]["uw"] = True
+                    self._send_json(200, {
+                        "status": response.status, "tickers": tickers,
+                        "rows_returned": len(rows),
+                    })
+                except Exception as error:
+                    status, safe_error = _error_payload(error)
+                    self._send_json(status, safe_error)
             elif route == "/api/status":
                 with state_lock:
-                    self._send_json(200, _status_payload(store, state["thesis"], state["summary"], state["verified"]))
+                    payload = _status_payload(store, state["thesis"], state["summary"], state["verified"])
+                with jobs_lock:
+                    active = next((job for job in jobs.values() if job["status"] in {"queued", "running"}), None)
+                    payload["active_operation"] = ({
+                        "kind": active["kind"], "status": active["status"], "progress": active["progress"],
+                    } if active else None)
+                self._send_json(200, payload)
+            elif route == "/api/replay":
+                with state_lock:
+                    self._send_json(200, _live_replay_payload(store, state["thesis"]))
             elif route.startswith("/api/jobs/"):
                 job_id = route.rsplit("/", 1)[-1]
                 with jobs_lock:
@@ -281,7 +361,13 @@ def serve(host: str = "127.0.0.1", port: int = 8766, db_path: Path = Path(".loca
                     if job is None:
                         self._send_json(404, {"error": "Job not found"})
                     else:
-                        self._send_json(job.get("http_status", 200), {key: value for key, value in job.items() if key != "http_status"})
+                        # The job resource itself was retrieved successfully even
+                        # when the operation failed. Keep transport status 200 so
+                        # the client can read and render the structured job error.
+                        self._send_json(200, {
+                            **{key: value for key, value in job.items() if key != "http_status"},
+                            "operation_http_status": job.get("http_status"),
+                        })
             else:
                 self._send_json(404, {"error": "Not found"})
 

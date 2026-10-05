@@ -2,6 +2,12 @@
 .env.*
 !.env.example
 .local/
+1.mp4
+artifacts/flow-thesis-demo-silent.mp4
+artifacts/flow-thesis-demo-encoded.mp4
+artifacts/flow-thesis-demo-mix.wav
+artifacts/flow-thesis-music-bed.wav
+artifacts/flow-thesis-elevenlabs.mp3
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal

@@ -67,7 +67,7 @@ def evaluate_snapshot(
     observations = list(unique.values())
     ids = tuple(event.source_id for event in observations)
     modes = {event.mode for event in observations}
-    mode = "synthetic" if "synthetic" in modes else "live" if modes == {"live"} else "replay"
+    mode = "live" if modes == {"live"} else "replay"
     input_material = {
         "thesis_id": thesis.id,
         "thesis_version": thesis.version,

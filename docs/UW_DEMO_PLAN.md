@@ -6,7 +6,7 @@ Show that this is a stateful research workflow, not a flow dashboard, chat respo
 
 ## Data mode rules
 
-Use live UW data only if the API key is entitled, the retrieval can finish during recording, and UW's terms/event permission allow displaying the result publicly. Otherwise use an explicitly labeled offline replay artifact with all UW-derived values masked/redacted or synthetic until UW confirms permissible display. Never call a historical replay “live.” Do not publish an API key, user account, raw payload or restricted data. The hackathon requires demo video or images, while API terms restrict data redistribution including derived data; written UW guidance is a release gate.
+The Replay page uses actual UW observations saved in the local ledger. It has no bundled example or fallback. Record the real live workflow only where the UW terms permit the intended display; never alter a live value or describe historical replay as a newly arriving event. Keep credentials, account identifiers, and raw API payloads off screen.
 
 ## 60-second path
 
@@ -28,7 +28,7 @@ Use live UW data only if the API key is entitled, the retrieval can finish durin
 3. Preserve the timeline, query filters, API response times, data freshness, rule version, and replay outcome. Do not choose only flattering examples; report the predeclared case-selection rule.
 4. Include one adverse case (incomplete feed, duplicate, stale timestamp, or conflicting evidence) that deterministically results in `indeterminate` or a recovery transition.
 5. Keep a second offline fixture for repeatability and mark every displayed row as fixture/replay.
-6. Publicly share only materials UW has permitted. If public real data is not authorized, use redacted/synthetic screenshots and state that the live-key mode runs locally; don't imply public viewers saw restricted live values.
+6. Publicly share the live-data recording only within the data display rights that apply to this account. Do not replace restricted live values with fabricated market evidence.
 
 ## On-screen visual hierarchy
 

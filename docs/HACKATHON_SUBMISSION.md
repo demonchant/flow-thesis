@@ -8,9 +8,7 @@ Flow Thesis Ledger turns a user's options-flow thesis into a reviewable set of d
 
 **Demo video (required before posting)**
 
-Record the real live workflow using `docs/LIVE_DEMO_VOICEOVER.md`. The generated narration and caption files are in `artifacts/flow-thesis-live-voiceover.mp3` and `.srt`. The committed replay screenshots are synthetic regression evidence only; do not present them as live UW activity.
-
-The images show the deterministic demo fixture only. They contain no real UW account data. Live flow ingestion is available via the read-only CLI path documented in the repository.
+The edited demo is rendered from the real screen capture with `python scripts/render_demo_video.py`. It includes animated title/section graphics, smooth push-ins, transition swishes, ElevenLabs narration, and a quiet music bed. It removes the old error-notice portions of the recording. The Replay page reads only live UW observations saved in the local ledger; when there are no saved observations, it shows an empty state. See [the video edit notes](DEMO_VIDEO_EDIT.md).
 
 **Built with**
 
@@ -21,13 +19,12 @@ The images show the deterministic demo fixture only. They contain no real UW acc
 **Files**
 
 - GitHub: https://github.com/demonchant/flow-thesis
+- Demo video: `artifacts/flow-thesis-demo.mp4` (render locally from the real screen capture; do not commit the raw recording).
 - No API keys are included. Configure `UW_API_KEY` and, for live thesis compilation, `OPENAI_API_KEY` in the local process environment.
 
 **Run locally**
 
 ```powershell
-python -m flow_thesis_ledger examples/thesis_replay.json
-python -m flow_thesis_ledger.web examples/thesis_replay.json
 python -m flow_thesis_ledger.live_web
 python -m unittest discover -s tests -v
 ```
